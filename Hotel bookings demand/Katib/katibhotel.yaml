@@ -1,0 +1,68 @@
+apiVersion: "kubeflow.org/v1beta1"
+kind: Experiment
+metadata:
+  namespace: sooter
+  name: hotelbook
+spec:
+  parallelTrialCount: 3
+  maxTrialCount: 30
+  maxFailedTrialCount: 3
+  objective:
+    type: maximize
+    goal: 0.99
+    objectiveMetricName: accuracy
+  algorithm:
+    algorithmName: bayesianoptimization
+  metricsCollectorSpec:
+    kind: StdOut
+  parameters:
+    - name: learning_rate
+      parameterType: double
+      feasibleSpace:
+        min: "0.001"
+        max: "0.01"
+    - name: batch_size
+      parameterType: int
+      feasibleSpace:
+        min: "80"
+        max: "200"
+    - name: optimizer
+      parameterType: categorical
+      feasibleSpace:
+        list:
+          - adam
+          - sgd
+  trialTemplate:
+    primaryContainerName: tensorflow
+    trialParameters:
+      - name: learningRate
+        description: Learning rate for the training model
+        reference: learning_rate
+      - name: batchSize
+        description: Batch Size
+        reference: batch_size
+      - name: optimizer
+        description: Training model optimizer (sdg, adam)
+        reference: optimizer
+    trialSpec:
+      apiVersion: "kubeflow.org/v1"
+      kind: TFJob
+      spec:
+        tfReplicaSpecs:
+          Worker:
+            replicas: 1
+            restartPolicy: OnFailure
+            template:
+              metadata:
+                annotations:
+                  sidecar.istio.io/inject: "false"
+              spec:
+                containers:
+                  - name: tensorflow
+                    image: mavencodev/tf_hotel:v.0.2
+                    command:
+                      - "python"
+                      - "/tfjob-hotel-demand.py"
+                      - "--batch_size=${trialParameters.batchSize}"
+                      - "--learning_rate=${trialParameters.learningRate}"
+                      - "--optimizer=${trialParameters.optimizer}"
